@@ -3,12 +3,12 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCeR7q_Q9iA21ckbuMUE4ZRWcBVDx-CCRw",
-  authDomain: "attendance-tracker-11ecc.firebaseapp.com",
-  projectId: "attendance-tracker-11ecc",
-  storageBucket: "attendance-tracker-11ecc.firebasestorage.app",
-  messagingSenderId: "143575877659",
-  appId: "1:143575877659:web:af9d546d70782e7c6fd0be"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase
