@@ -1,12 +1,23 @@
 import React from 'react';
 import { signInWithPopup, signOut } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, googleProvider, db } from '../firebase';
 import { LogIn, LogOut } from 'lucide-react';
 
 export default function Auth({ user }) {
   const handleSignIn = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const loggedInUser = result.user;
+      
+      // Save their profile so you can see who they are in the Firebase Console
+      const userRef = doc(db, 'users', loggedInUser.uid);
+      await setDoc(userRef, {
+        name: loggedInUser.displayName,
+        email: loggedInUser.email,
+        lastLogin: new Date().toISOString()
+      }, { merge: true });
+      
     } catch (error) {
       console.error("Error signing in with Google:", error);
     }
