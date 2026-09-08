@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, LineChart, Line
 } from 'recharts';
-import { Activity, BrainCircuit, AlertTriangle, TrendingUp } from 'lucide-react';
+import { format, isPast, isToday, parseISO } from 'date-fns';
+import { Activity, BrainCircuit, AlertTriangle, TrendingUp, Printer, Bell, CheckSquare } from 'lucide-react';
 
 const COLORS = ['#10b981', '#ef4444']; 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -15,8 +16,10 @@ export default function Dashboard({ user, timetable }) {
     totalPresent: 0,
     totalAbsent: 0,
     subjectStats: {},
-    dayStats: {}
+    dayStats: {},
+    dailyTrendData: []
   });
+  const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -34,6 +37,19 @@ export default function Dashboard({ user, timetable }) {
         // Initialize day stats
         DAY_ORDER.forEach(day => {
           dayStats[day] = { name: day, Absent: 0 };
+        });
+
+        // Initialize last 7 days trend
+        const dailyTrend = {};
+        const today = new Date();
+        const last7Days = Array.from({length: 7}).map((_, i) => {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i);
+          return format(d, 'yyyy-MM-dd');
+        }).reverse();
+        
+        last7Days.forEach(date => {
+          dailyTrend[date] = { date: format(new Date(date), 'MMM d'), Present: 0, Total: 0, percentage: 0 };
         });
 
         querySnapshot.forEach((doc) => {
@@ -62,6 +78,7 @@ export default function Dashboard({ user, timetable }) {
             if (status === 'Present') {
               totalPresent++;
               subjectStats[subjectName].Present++;
+              if (dailyTrend[data.date]) dailyTrend[data.date].Present++;
             } else if (status === 'Absent') {
               totalAbsent++;
               subjectStats[subjectName].Absent++;
@@ -70,10 +87,69 @@ export default function Dashboard({ user, timetable }) {
               }
             }
             subjectStats[subjectName].Total++;
+            if (dailyTrend[data.date]) dailyTrend[data.date].Total++;
           });
         });
 
-        setStats({ totalPresent, totalAbsent, subjectStats, dayStats });
+        const dailyTrendData = Object.values(dailyTrend).map(day => {
+          return {
+            ...day,
+            percentage: day.Total === 0 ? 0 : Math.round((day.Present / day.Total) * 100)
+          };
+        });
+
+        // Notifications Check
+        const newNotifications = [];
+        const todayStr = format(today, 'yyyy-MM-dd');
+        const todayDayOfWeek = format(today, 'EEEE');
+        
+        // 1. Check if today's attendance is marked
+        const todayHasClasses = timetable[todayDayOfWeek] && timetable[todayDayOfWeek].length > 0;
+        let todayMarked = false;
+        querySnapshot.forEach(doc => {
+          if (doc.id === todayStr) todayMarked = true;
+        });
+        
+        if (todayHasClasses && !todayMarked) {
+          newNotifications.push({
+            id: 'attendance',
+            type: 'warning',
+            title: "Don't forget!",
+            message: "You haven't marked today's attendance yet.",
+            icon: <Bell size={18} />
+          });
+        }
+
+        // 2. Fetch pending tasks with upcoming/overdue deadlines
+        try {
+          const tasksQuery = query(collection(db, 'users', user.uid, 'tasks'), where('completed', '==', false));
+          const tasksSnapshot = await getDocs(tasksQuery);
+          let urgentTasks = 0;
+          tasksSnapshot.forEach(doc => {
+            const t = doc.data();
+            if (t.dueDate) {
+              const date = parseISO(t.dueDate);
+              if (isPast(date) || isToday(date)) {
+                urgentTasks++;
+              }
+            }
+          });
+          
+          if (urgentTasks > 0) {
+            newNotifications.push({
+              id: 'tasks',
+              type: 'danger',
+              title: "Tasks Due!",
+              message: `You have ${urgentTasks} task(s) due today or overdue.`,
+              icon: <CheckSquare size={18} />
+            });
+          }
+        } catch (err) {
+          console.error("Error fetching tasks for notifications", err);
+        }
+
+        setStats({ totalPresent, totalAbsent, subjectStats, dayStats, dailyTrendData });
+        setNotifications(newNotifications);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -150,8 +226,42 @@ export default function Dashboard({ user, timetable }) {
 
   return (
     <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 print-break-inside-avoid">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-800">Dashboard</h2>
+          <p className="text-sm text-gray-500 mt-1">Overview of your attendance performance.</p>
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="no-print flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium rounded-lg transition-colors"
+        >
+          <Printer size={18} />
+          <span className="hidden sm:inline">Export PDF</span>
+        </button>
+      </div>
+
+      {/* Notifications Banners */}
+      {notifications.length > 0 && (
+        <div className="space-y-3 no-print">
+          {notifications.map(notif => (
+            <div key={notif.id} className={`p-4 rounded-xl flex items-start gap-3 shadow-sm border ${
+              notif.type === 'danger' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-yellow-50 border-yellow-100 text-yellow-800'
+            }`}>
+              <div className={`p-2 rounded-full shrink-0 ${notif.type === 'danger' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                {notif.icon}
+              </div>
+              <div>
+                <h4 className="font-semibold">{notif.title}</h4>
+                <p className="text-sm opacity-90 mt-0.5">{notif.message}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Top Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print-break-inside-avoid">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-500">Overall Attendance</p>
@@ -163,12 +273,12 @@ export default function Dashboard({ user, timetable }) {
           </div>
         </div>
         
-        <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
-          <div className="w-1/3 h-32">
+        <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-center gap-6">
+          <div className="w-full sm:w-1/2 h-40">
             {totalClasses > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={pieData} innerRadius={30} outerRadius={50} paddingAngle={5} dataKey="value">
+                  <Pie data={pieData} innerRadius={35} outerRadius={60} paddingAngle={5} dataKey="value">
                     {pieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -180,7 +290,7 @@ export default function Dashboard({ user, timetable }) {
               <div className="h-full flex items-center justify-center text-sm text-gray-400">No data</div>
             )}
           </div>
-          <div className="w-2/3 pl-6 border-l border-gray-100">
+          <div className="w-full sm:w-1/2 sm:pl-6 sm:border-l border-gray-100 mt-4 sm:mt-0">
             <h3 className="text-lg font-semibold text-gray-800">Total Classes</h3>
             <div className="mt-4 space-y-2">
               <div className="flex justify-between items-center text-sm">
@@ -197,7 +307,7 @@ export default function Dashboard({ user, timetable }) {
       </div>
 
       {/* AI Insights Panel */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 shadow-sm">
+      <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 shadow-sm print-break-inside-avoid">
         <h3 className="text-lg font-semibold text-indigo-900 flex items-center gap-2 mb-4">
           <BrainCircuit className="text-indigo-600" size={20} />
           Smart Insights
@@ -221,7 +331,7 @@ export default function Dashboard({ user, timetable }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Radar Chart (Subject Strengths) */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 print-break-inside-avoid">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Subject Performance Radar</h3>
           <p className="text-xs text-gray-500 mb-6">Visualizes your attendance percentage across all subjects.</p>
           <div className="h-64">
@@ -242,7 +352,7 @@ export default function Dashboard({ user, timetable }) {
         </div>
 
         {/* Day of Week Absences */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 print-break-inside-avoid">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Absences by Day</h3>
           <p className="text-xs text-gray-500 mb-6">See which days of the week you miss classes the most.</p>
           <div className="h-64">
@@ -263,8 +373,9 @@ export default function Dashboard({ user, timetable }) {
         </div>
       </div>
 
+
       {/* Progress Bars per Subject */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 print-break-inside-avoid">
         <h3 className="text-lg font-semibold text-gray-800 mb-6">Detailed Subject Progress</h3>
         <div className="space-y-6">
           {Object.values(stats.subjectStats).map((subject, idx) => {

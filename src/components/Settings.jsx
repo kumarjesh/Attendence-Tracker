@@ -152,34 +152,36 @@ export default function Settings({ user, timetable, setTimetable }) {
             {localTimetable[day]?.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {localTimetable[day].map((period, index) => (
-                  <div key={index} className="flex flex-col gap-2 p-3 border border-gray-200 rounded-lg bg-gray-50/50 relative group">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Period {index + 1}</span>
+                  <div key={index} className="flex flex-col gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50/50 relative group hover:border-indigo-200 transition-colors animate-in fade-in slide-in-from-left-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded-md">Period {index + 1}</span>
                       <button
                         onClick={() => removePeriod(day, index)}
-                        className="text-gray-300 hover:text-red-500 transition-colors"
+                        className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors"
                         title="Remove period"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                     
-                    <input
-                      type="text"
-                      value={period.subject}
-                      onChange={(e) => handleChange(day, index, 'subject', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
-                      placeholder="Subject name"
-                    />
-                    
-                    <div className="relative">
-                      <Clock size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+                    <div>
                       <input
                         type="text"
-                        value={period.time}
+                        value={period.subject || ''}
+                        onChange={(e) => handleChange(day, index, 'subject', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white"
+                        placeholder="Subject name"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all bg-white">
+                      <Clock size={16} className="text-gray-400 shrink-0" />
+                      <input
+                        type="text"
+                        value={period.time || ''}
                         onChange={(e) => handleChange(day, index, 'time', e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-md text-sm text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
-                        placeholder="e.g. 09:00 AM - 09:55 AM"
+                        className="w-full bg-transparent outline-none text-sm text-gray-600"
+                        placeholder="09:00 AM - 09:55 AM"
                       />
                     </div>
                   </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Save, Calendar as CalendarIcon, CheckCircle2, XCircle, Slash, Clock, MessageSquare } from 'lucide-react';
+import { Save, Calendar as CalendarIcon, CheckCircle2, XCircle, Slash, Clock, MessageSquare, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function DailyTracker({ user, timetable }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -12,6 +12,8 @@ export default function DailyTracker({ user, timetable }) {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [calendarViewDate, setCalendarViewDate] = useState(new Date());
 
   const dateStr = format(currentDate, 'yyyy-MM-dd');
   const dayOfWeek = format(currentDate, 'EEEE');
@@ -35,7 +37,7 @@ export default function DailyTracker({ user, timetable }) {
           // Initialize empty attendance for today's subjects
           const initial = {};
           todaySubjects.forEach((_, index) => {
-            initial[index] = { status: null, note: '' }; // object structure
+            initial[index] = { status: null, note: '', lectureNote: '' }; // object structure
           });
           setAttendance(initial);
         }
@@ -65,6 +67,16 @@ export default function DailyTracker({ user, timetable }) {
       return {
         ...prev,
         [index]: { ...current, note }
+      };
+    });
+  };
+
+  const handleLectureNoteChange = (index, lectureNote) => {
+    setAttendance(prev => {
+      const current = prev[index] || { status: null, note: '' };
+      return {
+        ...prev,
+        [index]: { ...current, lectureNote }
       };
     });
   };
@@ -109,32 +121,112 @@ export default function DailyTracker({ user, timetable }) {
     return <div className="p-8 text-center text-gray-500">Please set up your timetable in Settings first.</div>;
   }
 
+  const handleDayClick = (day) => {
+    setCurrentDate(day);
+    setCalendarViewDate(day);
+    setIsCalendarOpen(false);
+  };
+
+  const renderCalendar = () => {
+    const monthStart = startOfMonth(calendarViewDate);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
+
+    const dateFormat = "d";
+    const rows = [];
+    let days = [];
+    let day = startDate;
+    let formattedDate = "";
+
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const header = (
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {weekdays.map(wd => (
+          <div key={wd} className="text-center text-xs font-semibold text-gray-500">{wd}</div>
+        ))}
+      </div>
+    );
+
+    while (day <= endDate) {
+      for (let i = 0; i < 7; i++) {
+        formattedDate = format(day, dateFormat);
+        const cloneDay = day;
+        days.push(
+          <div
+            key={day.toISOString()}
+            onClick={() => handleDayClick(cloneDay)}
+            className={`p-2 flex justify-center items-center text-sm rounded-lg cursor-pointer transition-colors ${
+              !isSameMonth(day, monthStart)
+                ? "text-gray-300 hover:bg-gray-50"
+                : isSameDay(day, currentDate)
+                ? "bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700"
+                : isSameDay(day, new Date())
+                ? "bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100"
+                : "text-gray-700 hover:bg-gray-100 hover:text-indigo-600"
+            }`}
+          >
+            <span>{formattedDate}</span>
+          </div>
+        );
+        day = addDays(day, 1);
+      }
+      rows.push(
+        <div className="grid grid-cols-7 gap-1" key={day.toISOString()}>
+          {days}
+        </div>
+      );
+      days = [];
+    }
+
+    return (
+      <div className="absolute top-full left-0 sm:left-1/2 sm:-translate-x-1/2 mt-3 bg-white rounded-xl shadow-xl border border-gray-100 p-4 w-[280px] z-50 animate-in fade-in slide-in-from-top-2">
+        <div className="flex justify-between items-center mb-4">
+          <button onClick={() => setCalendarViewDate(subMonths(calendarViewDate, 1))} className="p-1 hover:bg-gray-100 rounded-md text-gray-600"><ChevronLeft size={18} /></button>
+          <div className="font-bold text-gray-800">{format(calendarViewDate, "MMMM yyyy")}</div>
+          <button onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))} className="p-1 hover:bg-gray-100 rounded-md text-gray-600"><ChevronRight size={18} /></button>
+        </div>
+        {header}
+        <div className="flex flex-col gap-1">{rows}</div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50/50">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full md:w-auto">
-          <button onClick={() => changeDate(-1)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">&larr;</button>
+      <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4 bg-gray-50/50">
+        <div className="flex items-center justify-between w-full md:w-auto gap-2">
+          <button onClick={() => changeDate(-1)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors shrink-0">&larr;</button>
           
-          <div className="flex items-center gap-2 font-semibold text-gray-800 text-lg relative group">
-            <CalendarIcon size={20} className="text-indigo-600" />
-            <input 
-              type="date" 
-              value={dateStr}
-              onChange={handleDatePick}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-            />
-            <span className="cursor-pointer group-hover:text-indigo-600 transition-colors">
-              {format(currentDate, 'MMM d, yyyy')} ({dayOfWeek})
-            </span>
+          <div className="flex items-center justify-center gap-2 font-semibold text-gray-800 text-base sm:text-lg relative flex-1">
+            <button 
+              onClick={() => {
+                setCalendarViewDate(currentDate);
+                setIsCalendarOpen(!isCalendarOpen);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors group"
+            >
+              <CalendarIcon size={20} className="text-indigo-600 shrink-0" />
+              <span className="group-hover:text-indigo-600 transition-colors truncate">
+                {format(currentDate, 'MMM d, yyyy')} ({dayOfWeek})
+              </span>
+            </button>
+            
+            {isCalendarOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsCalendarOpen(false)} />
+                {renderCalendar()}
+              </>
+            )}
           </div>
 
-          <button onClick={() => changeDate(1)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">&rarr;</button>
+          <button onClick={() => changeDate(1)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors shrink-0">&rarr;</button>
         </div>
         
         <button
           onClick={handleSave}
           disabled={isSaving || isLoading}
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
         >
           <Save size={18} />
           {isSaving ? 'Saving...' : 'Save Record'}
@@ -186,10 +278,11 @@ export default function DailyTracker({ user, timetable }) {
               
               if (!subjectName || !subjectName.trim()) return null;
               
-              const record = attendance[index] || { status: null, note: '' };
+              const record = attendance[index] || { status: null, note: '', lectureNote: '' };
               // Backward compatibility for old string records
               const status = typeof record === 'string' ? record : record.status;
               const note = typeof record === 'string' ? '' : record.note;
+              const lectureNote = typeof record === 'string' ? '' : (record.lectureNote || '');
 
               return (
                 <div key={index} className="flex flex-col p-4 border border-gray-100 rounded-xl gap-4 hover:border-indigo-100 hover:shadow-sm transition-all bg-gray-50/30">
@@ -208,38 +301,38 @@ export default function DailyTracker({ user, timetable }) {
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto mt-3 sm:mt-0">
                       <button
                         onClick={() => handleStatusChange(index, 'Present')}
-                        className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all flex-1 sm:flex-none ${
                           status === 'Present' 
                             ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-500 shadow-sm' 
                             : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                         }`}
                       >
-                        <CheckCircle2 size={16} className={status === 'Present' ? 'text-emerald-600' : ''} />
+                        <CheckCircle2 size={16} className={`shrink-0 ${status === 'Present' ? 'text-emerald-600' : ''}`} />
                         Present
                       </button>
                       <button
                         onClick={() => handleStatusChange(index, 'Absent')}
-                        className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all flex-1 sm:flex-none ${
                           status === 'Absent' 
                             ? 'bg-red-100 text-red-800 border-2 border-red-500 shadow-sm' 
                             : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                         }`}
                       >
-                        <XCircle size={16} className={status === 'Absent' ? 'text-red-600' : ''} />
+                        <XCircle size={16} className={`shrink-0 ${status === 'Absent' ? 'text-red-600' : ''}`} />
                         Absent
                       </button>
                       <button
                         onClick={() => handleStatusChange(index, 'Cancelled')}
-                        className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all flex-1 sm:flex-none ${
                           status === 'Cancelled' 
                             ? 'bg-gray-200 text-gray-800 border-2 border-gray-500 shadow-sm' 
                             : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                         }`}
                       >
-                        <Slash size={16} className={status === 'Cancelled' ? 'text-gray-700' : ''} />
+                        <Slash size={16} className={`shrink-0 ${status === 'Cancelled' ? 'text-gray-700' : ''}`} />
                         Cancelled
                       </button>
                     </div>
@@ -247,19 +340,33 @@ export default function DailyTracker({ user, timetable }) {
 
                   {/* Absence Note Input (Only show if Absent) */}
                   {status === 'Absent' && (
-                    <div className="mt-2 pl-11 pr-2 animate-in fade-in slide-in-from-top-2">
-                      <div className="relative">
-                        <MessageSquare size={14} className="absolute left-3 top-2.5 text-red-400" />
+                    <div className="mt-2 animate-in fade-in slide-in-from-top-2 w-full">
+                      <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50/50 border border-red-100 rounded-lg focus-within:ring-2 focus-within:ring-red-400 focus-within:border-red-400 transition-all">
+                        <MessageSquare size={16} className="text-red-400 shrink-0" />
                         <input
                           type="text"
                           value={note}
                           onChange={(e) => handleNoteChange(index, e.target.value)}
                           placeholder="Reason for absence (e.g., Got fever, Went home)"
-                          className="w-full pl-9 pr-3 py-2 bg-red-50/50 border border-red-100 rounded-md text-sm text-red-800 placeholder:text-red-300 focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none transition-all"
+                          className="w-full bg-transparent outline-none text-sm text-red-800 placeholder:text-red-300"
                         />
                       </div>
                     </div>
                   )}
+
+                  {/* Lecture Note / Task Input (Always show) */}
+                  <div className="mt-2 w-full">
+                    <div className="flex items-start gap-2 px-3 py-2.5 bg-white border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-indigo-400 transition-all">
+                      <FileText size={16} className="text-indigo-400 shrink-0 mt-0.5" />
+                      <textarea
+                        value={lectureNote}
+                        onChange={(e) => handleLectureNoteChange(index, e.target.value)}
+                        placeholder="Lecture notes, tasks, or assignments given..."
+                        rows="2"
+                        className="w-full bg-transparent outline-none resize-none text-sm text-gray-700 placeholder:text-gray-400"
+                      />
+                    </div>
+                  </div>
                 </div>
               );
             })}

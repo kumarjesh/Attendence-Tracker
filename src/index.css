@@ -8,3 +8,21 @@ body {
   background-color: var(--color-gray-50);
   color: var(--color-gray-900);
 }
+
+@media print {
+  body {
+    background-color: white;
+  }
+  nav, .sm\:hidden, .w-64.shrink-0 {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-break-inside-avoid {
+    break-inside: avoid;
+  }
+}

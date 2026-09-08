@@ -7,7 +7,8 @@ import Dashboard from './components/Dashboard';
 import DailyTracker from './components/DailyTracker';
 import Settings from './components/Settings';
 import AbsenceLog from './components/AbsenceLog';
-import { LayoutDashboard, CalendarCheck, Settings as SettingsIcon, GraduationCap, FileText } from 'lucide-react';
+import Tasks from './components/Tasks';
+import { LayoutDashboard, CalendarCheck, Settings as SettingsIcon, GraduationCap, FileText, CheckSquare } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -110,6 +111,12 @@ function App() {
           >
             <FileText size={16} /> Absence Log
           </button>
+          <button 
+            onClick={() => setActiveTab('tasks')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-colors ${activeTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            <CheckSquare size={16} /> Tasks
+          </button>
         </div>
 
         <div className="flex flex-col md:flex-row gap-8">
@@ -159,6 +166,17 @@ function App() {
               <FileText size={20} />
               Absence Log
             </button>
+            <button
+              onClick={() => setActiveTab('tasks')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+                activeTab === 'tasks' 
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 translate-x-1' 
+                  : 'text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 hover:translate-x-1'
+              }`}
+            >
+              <CheckSquare size={20} />
+              Tasks
+            </button>
           </div>
 
           {/* Render Active View */}
@@ -168,6 +186,7 @@ function App() {
               {activeTab === 'dashboard' && <Dashboard user={user} timetable={timetable} />}
               {activeTab === 'settings' && <Settings user={user} timetable={timetable} setTimetable={setTimetable} />}
               {activeTab === 'log' && <AbsenceLog user={user} timetable={timetable} />}
+              {activeTab === 'tasks' && <Tasks user={user} />}
             </div>
           </div>
         </div>
