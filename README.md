@@ -68,6 +68,7 @@ All user data is stored securely in **Google Cloud Firestore**. The database is 
 
 ## 📱 Deployment
 
+### Firebase Hosting
 Because this app utilizes Firebase for both Auth and Database, it is incredibly easy to deploy it to **Firebase Hosting** for free so you can use it on your phone.
 
 1. Install Firebase CLI: `npm install -g firebase-tools`
@@ -75,3 +76,6 @@ Because this app utilizes Firebase for both Auth and Database, it is incredibly 
 3. Initialize hosting: `firebase init hosting` (Select the `dist` folder)
 4. Build the app: `npm run build`
 5. Deploy: `firebase deploy`
+
+### Vercel
+You can also deploy this application seamlessly to Vercel. For detailed step-by-step instructions, please refer to the included `Vercel_Workflow_Guide.pdf` file in the repository.
