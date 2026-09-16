@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Save, Calendar as CalendarIcon, CheckCircle2, XCircle, Slash, Clock, MessageSquare, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Save, Calendar as CalendarIcon, CheckCircle2, XCircle, Slash, Clock, MessageSquare, FileText, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
+import { getActiveSchedule } from '../utils/timetable';
 
 export default function DailyTracker({ user, timetable }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -17,7 +18,24 @@ export default function DailyTracker({ user, timetable }) {
 
   const dateStr = format(currentDate, 'yyyy-MM-dd');
   const dayOfWeek = format(currentDate, 'EEEE');
-  const todaySubjects = timetable ? timetable[dayOfWeek] || [] : [];
+  const activeTimetable = getActiveSchedule(timetable, dateStr);
+  const todaySubjects = activeTimetable ? activeTimetable[dayOfWeek] || [] : [];
+  
+  const allUniqueSubjects = useMemo(() => {
+    if (!activeTimetable) return [];
+    const subjects = new Set();
+    Object.values(activeTimetable).forEach(dayPeriods => {
+      if (Array.isArray(dayPeriods)) {
+        dayPeriods.forEach(p => {
+          const name = typeof p === 'string' ? p : p.subject;
+          if (name && name.trim()) subjects.add(name.trim());
+        });
+      }
+    });
+    return Array.from(subjects).sort();
+  }, [activeTimetable]);
+  
+  const [editingSubject, setEditingSubject] = useState(null);
 
   useEffect(() => {
     const fetchAttendance = async () => {
@@ -79,6 +97,21 @@ export default function DailyTracker({ user, timetable }) {
         [index]: { ...current, lectureNote }
       };
     });
+  };
+
+  const saveSubjectSwap = (index, newValue) => {
+    if (editingSubject && editingSubject.index === index && newValue) {
+      setAttendance(prev => {
+        const current = prev[index] || { status: null, note: '', lectureNote: '' };
+        return {
+          ...prev,
+          [index]: { ...current, overrideSubject: newValue }
+        };
+      });
+      setEditingSubject(null);
+    } else {
+      setEditingSubject(null);
+    }
   };
 
   const handleSave = async () => {
@@ -283,16 +316,45 @@ export default function DailyTracker({ user, timetable }) {
               const status = typeof record === 'string' ? record : record.status;
               const note = typeof record === 'string' ? '' : record.note;
               const lectureNote = typeof record === 'string' ? '' : (record.lectureNote || '');
+              const overrideSubject = typeof record === 'string' ? null : record.overrideSubject;
+              const displaySubject = overrideSubject || subjectName;
 
               return (
                 <div key={index} className="flex flex-col p-4 border border-gray-100 rounded-xl gap-4 hover:border-indigo-100 hover:shadow-sm transition-all bg-gray-50/30">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 w-full sm:w-1/2">
                       <span className="flex shrink-0 items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-sm font-bold text-indigo-600">
                         {index + 1}
                       </span>
-                      <div>
-                        <span className="font-semibold text-gray-800 block text-lg">{subjectName}</span>
+                      <div className="flex-1">
+                        {editingSubject?.index === index ? (
+                           <div className="flex items-center gap-2">
+                             <select
+                               autoFocus
+                               value={editingSubject.value}
+                               onChange={(e) => saveSubjectSwap(index, e.target.value)}
+                               onBlur={() => setEditingSubject(null)}
+                               className="px-2 py-1.5 border border-indigo-300 rounded-lg text-sm w-full outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                             >
+                               <option value="" disabled>Select a subject...</option>
+                               {allUniqueSubjects.map(sub => (
+                                 <option key={sub} value={sub}>{sub}</option>
+                               ))}
+                             </select>
+                           </div>
+                        ) : (
+                          <div className="flex items-center gap-2 group/edit">
+                            <span className="font-semibold text-gray-800 block text-lg">{displaySubject}</span>
+                            {overrideSubject && <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-medium">Swapped</span>}
+                            <button 
+                              onClick={() => setEditingSubject({ index, value: displaySubject })}
+                              className="text-gray-400 hover:text-indigo-600 opacity-0 group-hover/edit:opacity-100 transition-opacity p-1"
+                              title="Edit Subject for today"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                          </div>
+                        )}
                         {periodTime && (
                           <span className="flex items-center gap-1 text-xs text-gray-500 mt-1 font-medium">
                             <Clock size={12} /> {periodTime}

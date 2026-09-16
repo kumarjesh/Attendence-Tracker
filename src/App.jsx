@@ -24,7 +24,20 @@ function App() {
         try {
           const docSnap = await getDoc(doc(db, 'users', currentUser.uid, 'settings', 'timetable'));
           if (docSnap.exists()) {
-            setTimetable(docSnap.data());
+            const data = docSnap.data();
+            if (data.versions) {
+              setTimetable(data);
+            } else {
+              // Backward compatibility for old format
+              setTimetable({
+                versions: [
+                  {
+                    effectiveDate: '2000-01-01',
+                    schedule: data
+                  }
+                ]
+              });
+            }
           } else {
             setTimetable(null); // will fall back to default in Settings
           }
