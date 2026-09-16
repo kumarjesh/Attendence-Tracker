@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { format, isPast, isToday, parseISO } from 'date-fns';
 import { Activity, BrainCircuit, AlertTriangle, TrendingUp, Printer, Bell, CheckSquare } from 'lucide-react';
+import { getActiveSchedule } from '../utils/timetable';
 
 const COLORS = ['#10b981', '#ef4444']; 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -58,7 +59,9 @@ export default function Dashboard({ user, timetable }) {
           
           const records = data.records;
           const dayOfWeek = data.dayOfWeek;
-          const daySubjects = timetable[dayOfWeek] || [];
+          
+          const activeTimetable = getActiveSchedule(timetable, data.date);
+          const daySubjects = activeTimetable ? activeTimetable[dayOfWeek] || [] : [];
           
           if (!records) return;
 
@@ -67,7 +70,11 @@ export default function Dashboard({ user, timetable }) {
             const period = daySubjects[index];
             
             const status = typeof record === 'string' ? record : record?.status;
-            const subjectName = typeof period === 'string' ? period : period?.subject;
+            let subjectName = typeof period === 'string' ? period : period?.subject;
+            
+            if (typeof record !== 'string' && record?.overrideSubject) {
+              subjectName = record.overrideSubject;
+            }
             
             if (!subjectName || status === 'Cancelled' || !status) return;
 
@@ -104,7 +111,8 @@ export default function Dashboard({ user, timetable }) {
         const todayDayOfWeek = format(today, 'EEEE');
         
         // 1. Check if today's attendance is marked
-        const todayHasClasses = timetable[todayDayOfWeek] && timetable[todayDayOfWeek].length > 0;
+        const activeTimetableForToday = getActiveSchedule(timetable, todayStr);
+        const todayHasClasses = activeTimetableForToday && activeTimetableForToday[todayDayOfWeek] && activeTimetableForToday[todayDayOfWeek].length > 0;
         let todayMarked = false;
         querySnapshot.forEach(doc => {
           if (doc.id === todayStr) todayMarked = true;

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Save, Plus, Trash2, Clock } from 'lucide-react';
+import { Save, Plus, Trash2, Clock, Calendar as CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import TimetableUploader from './TimetableUploader';
 
 const defaultTimetable = {
   Monday: [
@@ -62,17 +64,19 @@ export default function Settings({ user, timetable, setTimetable }) {
   const [localTimetable, setLocalTimetable] = useState(defaultTimetable);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [effectiveDate, setEffectiveDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
-    if (timetable) {
-      // Migrate old string arrays to objects if needed
+    if (timetable && timetable.versions && timetable.versions.length > 0) {
+      const sortedVersions = [...timetable.versions].sort((a, b) => new Date(b.effectiveDate) - new Date(a.effectiveDate));
+      setLocalTimetable(sortedVersions[0].schedule);
+    } else if (timetable && !timetable.versions) {
+      // Migrate old string arrays to objects if needed (fallback)
       const migratedTimetable = {};
-      let needsMigration = false;
       daysOfWeek.forEach(day => {
         const periods = timetable[day] || [];
         migratedTimetable[day] = periods.map(p => {
           if (typeof p === 'string') {
-            needsMigration = true;
             return { subject: p, time: '' };
           }
           return p;
@@ -104,8 +108,18 @@ export default function Settings({ user, timetable, setTimetable }) {
     setIsSaving(true);
     setMessage('');
     try {
-      await setDoc(doc(db, 'users', user.uid, 'settings', 'timetable'), localTimetable);
-      setTimetable(localTimetable);
+      const newVersion = { effectiveDate, schedule: localTimetable };
+      let updatedVersions = [];
+      if (timetable && timetable.versions) {
+        updatedVersions = timetable.versions.filter(v => v.effectiveDate !== effectiveDate);
+        updatedVersions.push(newVersion);
+      } else {
+        updatedVersions = [newVersion];
+      }
+      const dataToSave = { versions: updatedVersions };
+      
+      await setDoc(doc(db, 'users', user.uid, 'settings', 'timetable'), dataToSave);
+      setTimetable(dataToSave);
       setMessage('Timetable saved successfully!');
     } catch (error) {
       console.error('Error saving timetable:', error);
@@ -137,6 +151,24 @@ export default function Settings({ user, timetable, setTimetable }) {
       )}
 
       <div className="p-4 sm:p-6 space-y-10">
+        <TimetableUploader onExtract={setLocalTimetable} />
+
+        <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-blue-900">Effective Date</h3>
+            <p className="text-sm text-blue-700 mt-1">Changes to the timetable will apply from this date forward, preserving your past attendance history.</p>
+          </div>
+          <div className="flex items-center gap-2 bg-white px-3 py-2 border border-blue-200 rounded-lg shrink-0">
+            <CalendarIcon size={16} className="text-blue-500" />
+            <input 
+              type="date"
+              value={effectiveDate}
+              onChange={(e) => setEffectiveDate(e.target.value)}
+              className="text-sm text-gray-800 outline-none bg-transparent"
+            />
+          </div>
+        </div>
+
         {daysOfWeek.map((day) => (
           <div key={day} className="space-y-4">
             <div className="flex justify-between items-center border-b border-gray-100 pb-2">

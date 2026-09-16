@@ -3,6 +3,7 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { format, parseISO } from 'date-fns';
 import { FileText, Calendar as CalendarIcon, MessageSquare, Download } from 'lucide-react';
+import { getActiveSchedule } from '../utils/timetable';
 
 export default function AbsenceLog({ user, timetable }) {
   const [absences, setAbsences] = useState([]);
@@ -24,7 +25,8 @@ export default function AbsenceLog({ user, timetable }) {
           if (data.isHoliday) return; // Skip holidays completely
           
           const records = data.records;
-          const daySubjects = timetable[data.dayOfWeek] || [];
+          const activeTimetable = getActiveSchedule(timetable, data.date);
+          const daySubjects = activeTimetable ? activeTimetable[data.dayOfWeek] || [] : [];
           
           if (!records) return;
 
@@ -34,8 +36,12 @@ export default function AbsenceLog({ user, timetable }) {
             
             const status = typeof record === 'string' ? record : record?.status;
             const note = typeof record === 'string' ? '' : record?.note;
-            const subjectName = typeof period === 'string' ? period : period?.subject;
+            let subjectName = typeof period === 'string' ? period : period?.subject;
             const periodTime = typeof period === 'string' ? '' : period?.time;
+            
+            if (typeof record !== 'string' && record?.overrideSubject) {
+              subjectName = record.overrideSubject;
+            }
             
             if (status === 'Absent' && subjectName) {
               missedClasses.push({
